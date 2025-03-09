@@ -14,11 +14,7 @@ const Room = () => {
             ws.onmessage = (message) => {
                 const parsedMessage = JSON.parse(message.data);
                 if (parsedMessage.type === "joined") {
-                    console.log("join hogya koi", parsedMessage);
-                    setname(parsedMessage.payload.username);
-                    setRemoteSocketId(parsedMessage.payload.id);
-                    console.log("remote socket id", parsedMessage.payload.id);
-                    console.log("my name", parsedMessage.payload.username);
+                    handleUserJoined(parsedMessage);
                 }
                 else if (parsedMessage.type === "incomming:call-offer") {
                     handleIncommingCall(parsedMessage);
@@ -43,8 +39,50 @@ const Room = () => {
         }
     }, []);
 
+    const handleUserJoined = (parsedMessage: any) => {
+        console.log("join hogya koi", parsedMessage);
+        setname(parsedMessage.payload.username);
+        setRemoteSocketId(parsedMessage.payload.id);
+        console.log("remote socket id", parsedMessage.payload.id);
+        console.log("my name", parsedMessage.payload.username);
+    }
 
+    const handleIncommingCall = async (parsedMessage: any) => {
+        console.log("inside call offer", parsedMessage.payload.remoteSocketId);
+        setRemoteSocketId(parsedMessage.payload.remoteSocketId);
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true
+        });
+        setMyStream(stream);
+        console.log("incomming call", parsedMessage);
+        const ans = await peer.getAnswer(parsedMessage.payload.offer);
+        ws?.send(JSON.stringify({
+            type: "user-call:accepted",
+            payload: {
+                remoteSocketId: parsedMessage.payload.remoteSocketId,
+                ans: ans
+            }
+        }));
+    }
 
+    const handleCallAccepted = async (parsedMessage: any) => {
+        console.log("call accepted");
+        peer.setLocalDescription(parsedMessage.payload.ans);
+        sendStreams();
+    }
+
+    const handleNeedNigotiationIncoming = async (parsedMessage: any) => {
+        console.log("need negotiation incoming");
+        const ans = await peer.getAnswer(parsedMessage.payload.offer);
+        ws?.send(JSON.stringify({
+            type: "peer:negotiationaccepted",
+            payload: {
+                ans: ans,
+                remoteSocketId: parsedMessage.payload.remoteSocketId
+            }
+        }))
+    }
 
     const handleNegotiationFinal = async (parsedMessage: any) => {
         await peer.setLocalDescription(parsedMessage.payload.ans);
@@ -78,51 +116,14 @@ const Room = () => {
         });
     }, []);
 
-    const handleNeedNigotiationIncoming = async (parsedMessage: any) => {
-        console.log("need negotiation incoming");
-        const ans = await peer.getAnswer(parsedMessage.payload.offer);
-        ws?.send(JSON.stringify({
-            type: "peer:negotiationaccepted",
-            payload: {
-                ans: ans,
-                remoteSocketId: parsedMessage.payload.remoteSocketId
-            }
-        }))
-    }
+
 
     const sendStreams = () => {
-        if(!myStream) return;
+        if (!myStream) return;
         for (const track of myStream.getTracks()) {
             peer.peer.addTrack(track, myStream);
         }
     }
-
-
-    const handleCallAccepted = async (parsedMessage: any) => {
-        console.log("call accepted");
-        peer.setLocalDescription(parsedMessage.payload.ans);
-        sendStreams();
-    }
-
-    const handleIncommingCall = async (parsedMessage: any) => {
-        console.log("inside call offer", parsedMessage.payload.remoteSocketId);
-        setRemoteSocketId(parsedMessage.payload.remoteSocketId);
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: true
-        });
-        setMyStream(stream);
-        console.log("incomming call", parsedMessage);
-        const ans = await peer.getAnswer(parsedMessage.payload.offer);
-        ws?.send(JSON.stringify({
-            type: "user-call:accepted",
-            payload: {
-                remoteSocketId: parsedMessage.payload.remoteSocketId,
-                ans: ans
-            }
-        }));
-    }
-
 
     const handleCallUser = async () => {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -136,12 +137,12 @@ const Room = () => {
 
 
     return (
-        <div>
+        <div className="flex flex-col justify-center items-center">
             room
             {name && <h1>{name} joined</h1>}
             {myStream && <button onClick={sendStreams}>Send Stream</button>}
             {remoteSocketId &&
-                <button onClick={handleCallUser}>Call</button>
+                <button className="border" onClick={handleCallUser}>Call</button>
             }
             {myStream &&
                 <>
